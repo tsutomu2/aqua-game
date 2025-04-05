@@ -57,6 +57,9 @@
   </style>
 </head>
 <body>
+  <button onclick="document.getElementById('bgm').play()">BGMテスト</button>
+<button onclick="document.getElementById('explosionSound').play()">爆発音テスト</button>
+
 <div id="title">アクアボトルキャッチャー<br>熱血サトウくん</div>
 <div id="startScreen">
   <div>ゲームスタート！</div>
@@ -160,6 +163,7 @@ function updateBottles() {
           y: bottle.y,
           scale: 2
         };
+        explosionSound.pause();
         explosionSound.currentTime = 0;
         explosionSound.play();
         endGame(true);
@@ -182,7 +186,7 @@ function updateBottles() {
   bottleTimer++;
   if (bottleTimer >= bottleInterval) {
     const randomX = Math.random() * (canvas.width - 60);
-    const isRed = Math.random() < 0.2;
+    const isRed = Math.random() < 0.5;
     bottles.push({
       x: randomX,
       y: 0,
