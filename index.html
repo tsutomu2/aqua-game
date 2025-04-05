@@ -3,111 +3,252 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>アクアボトルキャッチ！佐藤くん</title>
+  <title>アクアボトルキャッチャー 熱血サトウくん</title>
   <style>
     body {
       margin: 0;
       background-color: #e0f7fa;
       overflow: hidden;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
       margin: 0 auto;
       background: #b2ebf2;
     }
+    #title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      padding: 10px;
+      background: #4dd0e1;
+      color: #004d40;
+    }
+    #startScreen, #gameOverScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #fff;
+      font-size: 24px;
+      z-index: 10;
+    }
+    #gameOverScreen {
+      display: none;
+      background: red;
+      flex-direction: column;
+    }
+    .btn {
+      background: #00796b;
+      color: #fff;
+      padding: 15px 30px;
+      font-size: 20px;
+      border: none;
+      border-radius: 10px;
+      margin: 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+<div id="title">アクアボトルキャッチャー<br>熱血サトウくん</div>
+<div id="startScreen">
+  <div>ゲームスタート！</div>
+  <button class="btn" onclick="startGame()">スタート</button>
+</div>
+<div id="gameOverScreen">
+  <div style="font-size: 48px; font-weight: bold;">GAME OVER</div>
+  <div id="finalScore"></div>
+  <button class="btn" onclick="restartGame()">もう一度</button>
+</div>
 <canvas id="gameCanvas" width="400" height="600"></canvas>
+<audio id="catchSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+<audio id="explosionSound" src="https://actions.google.com/sounds/v1/explosions/explosion.ogg"></audio>
+<audio id="bgm" src="https://cdn.pixabay.com/download/audio/2023/03/01/audio_6aa76fddef.mp3?filename=summer-vibes-141128.mp3" loop></audio>
 
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-
-// 画像の読み込み
 const satoImage = new Image();
-satoImage.src = "sato.png"; // 佐藤くんの画像ファイル（同じフォルダ内）
-
+satoImage.src = "sato.png";
 const bottleImage = new Image();
-bottleImage.src = "bottle.png"; // ボトルの画像ファイル（同じフォルダ内）
+bottleImage.src = "bottle.png";
+const redBottleImage = new Image();
+redBottleImage.src = "red_bottle.png";
+const catchSound = document.getElementById("catchSound");
+const explosionSound = document.getElementById("explosionSound");
+const bgm = document.getElementById("bgm");
 
-// 佐藤くんの情報
-let satoX = 150;
-let satoSpeed = 2;
-const satoWidth = 100;
-const satoHeight = 60; // 画像に合わせて高さ調整
+const satoOriginalWidth = 102;
+const satoOriginalHeight = 196;
+const satoScale = 1.0;
+const satoWidth = satoOriginalWidth * satoScale;
+const satoHeight = satoOriginalHeight * satoScale;
+let satoX = (canvas.width - satoWidth) / 2;
+const satoY = canvas.height - satoHeight - 10;
 
-// ボトル情報
 let bottles = [];
-const bottleWidth = 30;
-const bottleHeight = 60;
-const bottleSpeed = 4;
-
+let redHit = null;
+let bottleTimer = 0;
+const bottleInterval = 50;
 let score = 0;
+let highScore = 0;
+let combo = 0;
+let maxCombo = 0;
+let timeLeft = 30;
 let gameOver = false;
+let gameStarted = false;
+let timerInterval;
 
-canvas.addEventListener("click", () => {
-  if (!gameOver) {
-    bottles.push({ x: canvas.width / 2 - bottleWidth / 2, y: 0 });
-  }
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  satoX = e.clientX - rect.left - satoWidth / 2;
+  if (satoX < 0) satoX = 0;
+  if (satoX + satoWidth > canvas.width) satoX = canvas.width - satoWidth;
+});
+
+canvas.addEventListener("touchmove", (e) => {
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  satoX = touch.clientX - rect.left - satoWidth / 2;
+  if (satoX < 0) satoX = 0;
+  if (satoX + satoWidth > canvas.width) satoX = canvas.width - satoWidth;
 });
 
 function drawSato() {
-  ctx.drawImage(satoImage, satoX, canvas.height - satoHeight - 10, satoWidth, satoHeight);
+  ctx.drawImage(satoImage, satoX, satoY, satoWidth, satoHeight);
 }
 
 function drawBottles() {
   bottles.forEach(bottle => {
-    ctx.drawImage(bottleImage, bottle.x, bottle.y, bottleWidth, bottleHeight);
+    const img = bottle.isRed ? redBottleImage : bottleImage;
+    const baseScale = bottle.isRed ? bottle.scale : 1.5;
+    const drawWidth = img.width * baseScale * 0.3;
+    const drawHeight = img.height * baseScale * 0.3;
+    ctx.drawImage(img, bottle.x, bottle.y, drawWidth, drawHeight);
+    bottle.drawWidth = drawWidth;
+    bottle.drawHeight = drawHeight;
   });
+
+  if (redHit) {
+    redHit.scale += 0.05;
+    const drawWidth = redBottleImage.width * redHit.scale * 0.3;
+    const drawHeight = redBottleImage.height * redHit.scale * 0.3;
+    ctx.drawImage(redBottleImage, redHit.x, redHit.y, drawWidth, drawHeight);
+  }
 }
 
 function updateBottles() {
   bottles.forEach((bottle, index) => {
-    bottle.y += bottleSpeed;
+    bottle.y += 6;
+    bottle.x += Math.sin(bottle.y / 10) * 5;
 
-    // キャッチ判定
     if (
-      bottle.y + bottleHeight >= canvas.height - satoHeight - 10 &&
-      bottle.x + bottleWidth > satoX &&
+      bottle.y + bottle.drawHeight >= satoY &&
+      bottle.x + bottle.drawWidth > satoX &&
       bottle.x < satoX + satoWidth
     ) {
+      if (bottle.isRed && !gameOver) {
+        redHit = {
+          x: bottle.x,
+          y: bottle.y,
+          scale: 2
+        };
+        explosionSound.currentTime = 0;
+        explosionSound.play();
+        endGame(true);
+        return;
+      }
       score += 10;
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
       bottles.splice(index, 1);
+      catchSound.currentTime = 0;
+      catchSound.play();
     }
 
-    // 地面に落ちたら削除
     if (bottle.y > canvas.height) {
       bottles.splice(index, 1);
+      combo = 0;
     }
   });
-}
 
-function moveSato() {
-  satoX += satoSpeed;
-  if (satoX + satoWidth > canvas.width || satoX < 0) {
-    satoSpeed *= -1;
+  bottleTimer++;
+  if (bottleTimer >= bottleInterval) {
+    const randomX = Math.random() * (canvas.width - 60);
+    const isRed = Math.random() < 0.2;
+    bottles.push({
+      x: randomX,
+      y: 0,
+      isRed: isRed,
+      scale: isRed ? 2 : 1.5
+    });
+    bottleTimer = 0;
   }
 }
 
 function drawScore() {
   ctx.fillStyle = "#000";
   ctx.font = "20px sans-serif";
-  ctx.fillText("スコア: " + score, 10, 30);
+  ctx.fillText(`スコア: ${score}`, 10, 30);
+  ctx.fillText(`コンボ: ${combo}`, 10, 60);
+  ctx.fillText(`残り: ${timeLeft}s`, 10, 90);
 }
 
-function gameLoop() {
+function drawGame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawSato();
   drawBottles();
   drawScore();
-  updateBottles();
-  moveSato();
+}
 
+function gameLoop() {
+  drawGame();
+  updateBottles();
   if (!gameOver) requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+function startGame() {
+  document.getElementById("startScreen").style.display = "none";
+  document.getElementById("gameOverScreen").style.display = "none";
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  timeLeft = 30;
+  bottles = [];
+  redHit = null;
+  gameOver = false;
+  gameStarted = true;
+  bgm.currentTime = 0;
+  bgm.play();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    if (timeLeft <= 0) endGame(false);
+  }, 1000);
+  gameLoop();
+}
+
+function endGame(isRed) {
+  clearInterval(timerInterval);
+  bgm.pause();
+  bgm.currentTime = 0;
+  gameOver = true;
+  highScore = Math.max(highScore, score);
+  setTimeout(() => {
+    document.getElementById("finalScore").innerHTML = `スコア: ${score}<br>ハイスコア: ${highScore}<br>最大コンボ: ${maxCombo}`;
+    document.getElementById("gameOverScreen").style.display = "flex";
+  }, isRed ? 1200 : 0);
+}
+
+function restartGame() {
+  startGame();
+}
 </script>
 </body>
 </html>
