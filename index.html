@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アクアボトルキャッチ！佐藤くん</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #e0f7fa;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #b2ebf2;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// 画像の読み込み
+const satoImage = new Image();
+satoImage.src = "sato.png"; // 佐藤くんの画像ファイル（同じフォルダ内）
+
+const bottleImage = new Image();
+bottleImage.src = "bottle.png"; // ボトルの画像ファイル（同じフォルダ内）
+
+// 佐藤くんの情報
+let satoX = 150;
+let satoSpeed = 2;
+const satoWidth = 100;
+const satoHeight = 60; // 画像に合わせて高さ調整
+
+// ボトル情報
+let bottles = [];
+const bottleWidth = 30;
+const bottleHeight = 60;
+const bottleSpeed = 4;
+
+let score = 0;
+let gameOver = false;
+
+canvas.addEventListener("click", () => {
+  if (!gameOver) {
+    bottles.push({ x: canvas.width / 2 - bottleWidth / 2, y: 0 });
+  }
+});
+
+function drawSato() {
+  ctx.drawImage(satoImage, satoX, canvas.height - satoHeight - 10, satoWidth, satoHeight);
+}
+
+function drawBottles() {
+  bottles.forEach(bottle => {
+    ctx.drawImage(bottleImage, bottle.x, bottle.y, bottleWidth, bottleHeight);
+  });
+}
+
+function updateBottles() {
+  bottles.forEach((bottle, index) => {
+    bottle.y += bottleSpeed;
+
+    // キャッチ判定
+    if (
+      bottle.y + bottleHeight >= canvas.height - satoHeight - 10 &&
+      bottle.x + bottleWidth > satoX &&
+      bottle.x < satoX + satoWidth
+    ) {
+      score += 10;
+      bottles.splice(index, 1);
+    }
+
+    // 地面に落ちたら削除
+    if (bottle.y > canvas.height) {
+      bottles.splice(index, 1);
+    }
+  });
+}
+
+function moveSato() {
+  satoX += satoSpeed;
+  if (satoX + satoWidth > canvas.width || satoX < 0) {
+    satoSpeed *= -1;
+  }
+}
+
+function drawScore() {
+  ctx.fillStyle = "#000";
+  ctx.font = "20px sans-serif";
+  ctx.fillText("スコア: " + score, 10, 30);
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawSato();
+  drawBottles();
+  drawScore();
+  updateBottles();
+  moveSato();
+
+  if (!gameOver) requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
